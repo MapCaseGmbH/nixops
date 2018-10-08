@@ -18,6 +18,14 @@ with import ./lib.nix lib;
       description = "Amazon RDS region.";
     };
 
+    zone = mkOption {
+      # NOTE: We're making this required in NixOps but the api can handle
+      # choosing the zone. Making this required will prevent having
+      # the diff engine trigger the zone handler in each deploy.
+      type = types.str;
+      description = "AWS availability zone.";
+    };
+
     multiAZ = mkOption {
       default = false;
       type = types.bool;
@@ -82,11 +90,29 @@ with import ./lib.nix lib;
     };
 
     securityGroups = mkOption {
-      default = [ "default" ];
+      default = [];
       type = types.listOf (types.either types.str (resource "ec2-rds-security-group"));
       apply = map (x: if builtins.isString x then x else "res-" + x._name);
       description = ''
         List of names of DBSecurityGroup to authorize on this DBInstance.
+      '';
+    };
+
+    vpcSecurityGroups = mkOption {
+      default = [];
+      type = types.listOf (types.either types.str (resource "ec2-security-group"));
+      apply = map (x: if builtins.isString x then x else "res-" + x._name);
+      description = ''
+        List of names of EC2SecurityGroup to authorize on this DBInstance.
+      '';
+    };
+
+    subnetGroup = mkOption {
+      default = null;
+      type = with types; nullOr (either str (resource "ec2-rds-subnet-group"));
+      apply = x: if builtins.isString x then x else x._name;
+      description = ''
+        A DB subnet group to associate with this DB instance.
       '';
     };
 
