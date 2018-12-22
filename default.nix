@@ -3,7 +3,7 @@
 python2Packages.buildPythonApplication rec {
   name = "nixops-${version}";
   src = ./.;
-  version = "ml-monkey-version";
+  version = "24_10_2018";
 
   buildInputs = [ libxslt ];
 
