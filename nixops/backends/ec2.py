@@ -225,7 +225,7 @@ class EC2State(MachineState, nixops.resources.ec2_common.EC2CommonState):
         val = {}
         if backupid in self.backups:
             for device_stored, snap in self.backups[backupid].items():
-                device_real = device_name_save_to_real(dev)
+                device_real = device_name_stored_to_real(device_stored)
 
                 is_root_device = device_real.startswith("/dev/xvda") or device_real.startswith("/dev/nvme0")
 
@@ -298,7 +298,13 @@ class EC2State(MachineState, nixops.resources.ec2_common.EC2CommonState):
     def _get_spot_instance_request_by_id(self, request_id, allow_missing=False):
         """Get spot instance request object by id."""
         self.connect()
-        result = self._conn.get_all_spot_instance_requests([request_id])
+        try:
+            result = self._conn.get_all_spot_instance_requests([request_id])
+        except boto.exception.EC2ResponseError as e:
+            if allow_missing and e.error_code == "InvalidSpotInstanceRequestID.NotFound":
+                result = []
+            else:
+                raise
         if len(result) == 0:
             if allow_missing:
                 return None
@@ -403,6 +409,7 @@ class EC2State(MachineState, nixops.resources.ec2_common.EC2CommonState):
         backups = {}
         current_volumes = set([v['volumeId'] for v in self.block_device_mapping.values()])
         for b_id, b in self.backups.items():
+            b = {device_name_stored_to_real(device): snap for device, snap in b.items()}
             backups[b_id] = {}
             backup_status = "complete"
             info = []
@@ -1484,15 +1491,16 @@ class EC2State(MachineState, nixops.resources.ec2_common.EC2CommonState):
             res.disks_ok = True
             for device_stored, v in self.block_device_mapping.items():
                 device_real = device_name_stored_to_real(device_stored)
+                device_that_boto_expects = device_name_to_boto_expected(device_real) # boto expects only sd names
 
-                if device_stored not in instance.block_device_mapping.keys() and v.get('volumeId', None):
+                if device_that_boto_expects not in instance.block_device_mapping.keys() and v.get('volumeId', None):
                     res.disks_ok = False
                     res.messages.append("volume ‘{0}’ not attached to ‘{1}’".format(v['volumeId'], device_real))
                     volume = nixops.ec2_utils.get_volume_by_id(self.connect(), v['volumeId'], allow_missing=True)
                     if not volume:
                         res.messages.append("volume ‘{0}’ no longer exists".format(v['volumeId']))
 
-                if device_stored in instance.block_device_mapping.keys() and instance.block_device_mapping[device_stored].status != 'attached' :
+                if device_that_boto_expects in instance.block_device_mapping.keys() and instance.block_device_mapping[device_that_boto_expects].status != 'attached' :
                     res.disks_ok = False
                     res.messages.append("volume ‘{0}’ on device ‘{1}’ has unexpected state: ‘{2}’".format(v['volumeId'], device_real, instance.block_device_mapping[device_stored].status))
 
