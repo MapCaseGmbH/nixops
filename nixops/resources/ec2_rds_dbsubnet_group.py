@@ -89,7 +89,7 @@ class EC2RDSDbSubnetGroupState(nixops.resources.ResourceState):
         with self.depl._db:
             self.access_key_id = defn.access_key_id or nixops.ec2_utils.get_access_key_id()
             if not self.access_key_id:
-                raise Exception("please set ‘accessKeyId’, $EC2_ACCESS_KEY or $AWS_ACCESS_KEY_ID")
+                raise Exception("please set 'accessKeyId', $EC2_ACCESS_KEY or $AWS_ACCESS_KEY_ID")
             self.region = defn.region
 
         self._connect()
